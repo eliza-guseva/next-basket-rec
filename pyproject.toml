@@ -1,0 +1,32 @@
+[project]
+name = "nbr-experiment"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "numpy>=1.26.4",
+    "pandas>=2.2.3",
+    "scikit-learn>=1.4.2",
+]
+
+
+[tool.ruff]
+line-length = 90
+lint.select = ["E", "F", "W", "C90", "I", "N", "UP", "B", "A", "C4", "T20"]
+lint.ignore = ["E501", "W293"]
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+ignore_missing_imports = true
+disable_error_code = ["import-untyped"]
+
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "ipykernel",
+    "matplotlib",
+    "seaborn",
+]
