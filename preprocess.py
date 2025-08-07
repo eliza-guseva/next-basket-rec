@@ -41,6 +41,7 @@ def ingest_the_data(dataloc: str = "instacart_dataset") -> pd.DataFrame:
     order_item_train = read_data('order_products__train.csv', dataloc)
     order_item = pd.concat([order_item_prior, order_item_train], ignore_index=True)
     user_order = pd.merge(user_order_d, order_item, on='order_id', how='inner')
+    logging.info(f"Ingested. Total transactions: {user_order.shape[0]}")
     return user_order
 
 
@@ -82,8 +83,16 @@ def get_train_test(sample_data: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFram
     # we can add this tag manually to user's last order
     for user_id in sample_data.user_id.unique():
         u_df = sample_data[sample_data.user_id == user_id].sort_values("order_number")
-        trains.append(u_df.iloc[:-1,:])
-        tests.append(u_df.iloc[-1:,:])
+        max_order_number = u_df.order_number.max()
+        u_train = u_df[u_df.order_number < max_order_number].copy()
+        u_test = u_df[u_df.order_number == max_order_number].copy()
+        items_in_test = set(u_test.product_id.unique())
+        items_in_train = set(u_train.product_id.unique())
+        prop_new_in_test = len(items_in_test.difference(items_in_train)) / len(items_in_test)
+        u_test['explore_coeff'] = prop_new_in_test
+
+        trains.append(u_train)
+        tests.append(u_test)
 
     train = pd.concat(trains)
     test = pd.concat(tests)
