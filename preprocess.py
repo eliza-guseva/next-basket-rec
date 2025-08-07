@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 import logging
+from joblib import Parallel, delayed
 
 
 np.random.seed(1)
@@ -94,6 +95,7 @@ def _sort_and_drop_columns(df: pd.DataFrame) -> pd.DataFrame:
         df = df[['user_id', 'order_number', 'product_id', 'eval_set']]
     return df
 
+
 def get_train_test(sample_data: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     logging.info("Getting train and test")
     logging.info(f"Sample data shape: {sample_data.shape}")
@@ -104,20 +106,13 @@ def get_train_test(sample_data: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFram
     # not all users that have tag 'prior' (meaning train), have also tag 'train' meaning test.
     # we can add this tag manually to user's last order
     user_ids = sample_data.user_id.unique()
-    for (idx, user_id) in enumerate(user_ids):
-        if idx % 5000 == 0:
-            logging.info(f"Processing user {idx} of {len(user_ids)}")
-        u_df = sample_data[sample_data.user_id == user_id].sort_values("order_number")
-        max_order_number = u_df.order_number.max()
-        u_train = u_df[u_df.order_number < max_order_number].copy()
-        u_test = u_df[u_df.order_number == max_order_number].copy()
-        items_in_test = set(u_test.product_id.unique())
-        items_in_train = set(u_train.product_id.unique())
-        prop_new_in_test = np.round(len(items_in_test.difference(items_in_train)) / len(items_in_test), 3)
-        u_test.loc[:, 'explore_coeff'] = prop_new_in_test
+    results = Parallel(n_jobs=-1, batch_size=1000)(
+        delayed(_process_user)(sample_data, user_id) 
+        for user_id in user_ids
+        )
 
-        trains.append(u_train)
-        tests.append(u_test)
+    trains = [result[0] for result in results]
+    tests = [result[1] for result in results]
 
     train = pd.concat(trains)
     test = pd.concat(tests)
@@ -134,6 +129,18 @@ def get_train_test(sample_data: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFram
         _sort_and_drop_columns(train), 
         _sort_and_drop_columns(test)
     )
+    
+
+def _process_user(sample_data: pd.DataFrame, user_id: int) -> tuple[pd.DataFrame, pd.DataFrame]:
+    u_df = sample_data[sample_data.user_id == user_id].sort_values("order_number")
+    max_order_number = u_df.order_number.max()
+    u_train = u_df[u_df.order_number < max_order_number].copy()
+    u_test = u_df[u_df.order_number == max_order_number].copy()
+    items_in_test = set(u_test.product_id.unique())
+    items_in_train = set(u_train.product_id.unique())
+    prop_new_in_test = np.round(len(items_in_test.difference(items_in_train)) / len(items_in_test), 3)
+    u_test.loc[:, 'explore_coeff'] = prop_new_in_test
+    return u_train, u_test
 
 
 def remove_rare_products(
