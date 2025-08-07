@@ -26,7 +26,8 @@ def preprocess(
     sample_data = remove_outlier_users_by_n_orders(sample_data, low_ord_per_user, high_ord_per_user)
     train, test = get_train_test(sample_data)
     train, test = remove_rare_products(train, test, min_count_product)
-    save_train_test(train, test, dataloc)
+    suffix = get_suffix(sample_ratio, min_count_product, low_ord_per_user, high_ord_per_user)
+    save_train_test(train, test, dataloc, suffix)
     return train, test
 
 
@@ -67,10 +68,13 @@ def remove_outlier_users_by_n_orders(sample_data: pd.DataFrame, low: int = 3, hi
 
 
 def _sort_and_drop_columns(df: pd.DataFrame) -> pd.DataFrame:
-    return (
-        df.sort_values(['user_id', 'order_number'])
-        .reset_index(drop=True)
-    )[['user_id', 'order_number', 'product_id', 'eval_set']]
+    logging.info("Sorting and dropping columns")
+    df = df.sort_values(['user_id', 'order_number']).reset_index(drop=True)
+    if 'explore_coeff' in df.columns:
+        df = df[['user_id', 'order_number', 'product_id', 'eval_set', 'explore_coeff']]
+    else:
+        df = df[['user_id', 'order_number', 'product_id', 'eval_set']]
+    return df
 
 def get_train_test(sample_data: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     logging.info("Getting train and test")
@@ -81,17 +85,18 @@ def get_train_test(sample_data: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFram
 
     # not all users that have tag 'prior' (meaning train), have also tag 'train' meaning test.
     # we can add this tag manually to user's last order
-    for (idx, user_id) in enumerate(sample_data.user_id.unique()):
-        if idx % 10000 == 0:
-            logging.info(f"Processing user {idx} of {len(sample_data.user_id.unique())}")
+    user_ids = sample_data.user_id.unique()
+    for (idx, user_id) in enumerate(user_ids):
+        if idx % 5000 == 0:
+            logging.info(f"Processing user {idx} of {len(user_ids)}")
         u_df = sample_data[sample_data.user_id == user_id].sort_values("order_number")
         max_order_number = u_df.order_number.max()
         u_train = u_df[u_df.order_number < max_order_number].copy()
         u_test = u_df[u_df.order_number == max_order_number].copy()
         items_in_test = set(u_test.product_id.unique())
         items_in_train = set(u_train.product_id.unique())
-        prop_new_in_test = len(items_in_test.difference(items_in_train)) / len(items_in_test)
-        u_test['explore_coeff'] = prop_new_in_test
+        prop_new_in_test = np.round(len(items_in_test.difference(items_in_train)) / len(items_in_test), 3)
+        u_test.loc[:, 'explore_coeff'] = prop_new_in_test
 
         trains.append(u_train)
         tests.append(u_test)
@@ -131,9 +136,23 @@ def remove_rare_products(
     logging.info(f"Test size: {test.shape}")
     return train, test
 
+def get_suffix(
+    sample_ratio: float = 0.1,
+    min_count_product: int = 17,
+    low_ord_per_user: int = 3,
+    high_ord_per_user: int = 50,
+) -> str:
+    sr = str(sample_ratio).replace('.', '')
+    return f"sample_{sr}_min_prod_{min_count_product}_low_ord_{low_ord_per_user}_high_ord_{high_ord_per_user}"
 
-def save_train_test(train: pd.DataFrame, test: pd.DataFrame, dataloc: str = "instacart_dataset") -> None:
+
+def save_train_test(
+    train: pd.DataFrame, 
+    test: pd.DataFrame, 
+    dataloc: str = "instacart_dataset",
+    suffix: str = ""
+) -> None:
     logging.info("Saving train and test")
-    train.to_csv(Path(dataloc) / 'train.csv', index=False)
-    test.to_csv(Path(dataloc) / 'test.csv', index=False)
+    train.to_csv(Path(dataloc) / f'train_{suffix}.csv', index=False)
+    test.to_csv(Path(dataloc) / f'test_{suffix}.csv', index=False)
 
