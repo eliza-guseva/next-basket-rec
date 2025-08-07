@@ -81,7 +81,9 @@ def get_train_test(sample_data: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFram
 
     # not all users that have tag 'prior' (meaning train), have also tag 'train' meaning test.
     # we can add this tag manually to user's last order
-    for user_id in sample_data.user_id.unique():
+    for (idx, user_id) in enumerate(sample_data.user_id.unique()):
+        if idx % 10000 == 0:
+            logging.info(f"Processing user {idx} of {len(sample_data.user_id.unique())}")
         u_df = sample_data[sample_data.user_id == user_id].sort_values("order_number")
         max_order_number = u_df.order_number.max()
         u_train = u_df[u_df.order_number < max_order_number].copy()
