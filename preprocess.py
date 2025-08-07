@@ -5,8 +5,10 @@ import logging
 
 
 np.random.seed(1)
-
 logging.basicConfig(level=logging.INFO)
+
+
+### MAIN FUNCTIONS ###
 
 
 def preprocess(
@@ -29,6 +31,22 @@ def preprocess(
     suffix = get_suffix(sample_ratio, min_count_product, low_ord_per_user, high_ord_per_user)
     save_train_test(train, test, dataloc, suffix)
     return train, test
+
+
+def load_train_test(
+    dataloc: str = "instacart_dataset", 
+    sample_ratio: float = 0.1,
+    min_count_product: int = 17,
+    low_ord_per_user: int = 3,
+    high_ord_per_user: int = 50,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    suffix = get_suffix(sample_ratio, min_count_product, low_ord_per_user, high_ord_per_user)
+    train = read_data(f'train_{suffix}.csv', dataloc)
+    test = read_data(f'test_{suffix}.csv', dataloc)
+    return train, test
+
+
+### HELPER FUNCTIONS ###
 
 
 def read_data(fn: str, dataloc: str = "instacart_dataset") -> pd.DataFrame:
